@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alesta AI - Beta Kodlu Sohbet</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+    body.dark { background-color: #0f172a; color: #e2e8f0; }
+    .user-msg     { background:#d1fae5; border-radius:12px 12px 0 12px; }
+    .ai-msg       { background:#e2e8f0; border-radius:12px 12px 12px 0; }
+    body.dark .user-msg { background:#065f46; color:white; }
+    body.dark .ai-msg   { background:#1e293b; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-6 transition">
+
+<h1 class="text-3xl font-bold mb-4">Alesta AI - Beta Sohbet</h1>
+
+<!-- Beta Kod Girişi -->
+<div id="beta-code-setup" class="w-full max-w-lg p-6 bg-gray-100 rounded shadow">
+    <h2 class="text-xl font-semibold mb-3">Beta Kodunuzu Girin</h2>
+    <input type="text" id="beta-code-input" class="w-full p-2 border rounded mb-2" placeholder="Beta kodunu girin">
+    <button id="check-beta-btn" class="w-full p-2 bg-blue-600 text-white rounded hover:bg-blue-700">Kontrol Et</button>
+    <p id="beta-status" class="text-sm text-red-600 mt-2"></p>
+</div>
+
+<!-- Sohbet Arayüzü -->
+<div id="chat-interface" class="hidden w-full max-w-2xl flex flex-col gap-4 mt-4">
+    <div id="auth-info" class="text-sm"></div>
+    <ul id="history-list" class="flex flex-col gap-3 overflow-y-auto max-h-[60vh] p-3 bg-gray-50 rounded shadow"></ul>
+    <form id="chat-form" class="flex gap-3">
+        <input id="chat-input" class="flex-grow p-3 border rounded" placeholder="Bir şey yazın...">
+        <button id="send-btn" class="px-4 bg-blue-600 text-white rounded hover:bg-blue-700">Gönder</button>
+    </form>
+    <p id="status-message" class="text-sm h-5"></p>
+</div>
+
+<script>
+// ------------------- Beta Kodları -------------------
+const betaCodes = [
+    { code: "X7B2K9QF", admin: true },
+    { code: "M4D8J2LZ", admin: false },
+    { code: "P9A1V5TY", admin: false },
+    { code: "R6C3N0HZ", admin: false },
+    { code: "L8S4W1BQ", admin: false },
+    { code: "T2Y9K7MX", admin: false },
+    { code: "Q5H0F8RD", admin: false },
+    { code: "N3V6P2JL", admin: false },
+    { code: "G1B9Z4CW", admin: false },
+    { code: "U7E5X3KS", admin: false }
+];
+
+const API_KEY = "AIzaSyCNpK_dTnxzlDtHOrqSxl2UDSZht688lBg"; // Sabit API key
+const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+// ------------------- UI Elemanları -------------------
+const betaInput = document.getElementById("beta-code-input");
+const checkBetaBtn = document.getElementById("check-beta-btn");
+const betaStatus = document.getElementById("beta-status");
+const chatInterface = document.getElementById("chat-interface");
+const authInfo = document.getElementById("auth-info");
+const historyList = document.getElementById("history-list");
+const chatForm = document.getElementById("chat-form");
+const chatInput = document.getElementById("chat-input");
+const sendBtn = document.getElementById("send-btn");
+const statusMessage = document.getElementById("status-message");
+
+// ------------------- Beta Kod Kontrol -------------------
+function checkBetaCode(userCode) {
+    const found = betaCodes.find(c => c.code === userCode.trim().toUpperCase());
+    if (found) return found;
+    return null;
+}
+
+// ------------------- Mesaj Fonksiyonu -------------------
+function appendMessage(text, role) {
+    const li = document.createElement("li");
+    li.className = `p-3 shadow max-w-[80%] whitespace-pre-wrap ${
+        role === "user" ? "self-end user-msg" : "self-start ai-msg"
+    }`;
+    li.innerHTML = marked.parse(text);
+    historyList.appendChild(li);
+    historyList.scrollTop = historyList.scrollHeight;
+}
+
+// ------------------- Beta Kontrol Butonu -------------------
+checkBetaBtn.addEventListener("click", () => {
+    const code = betaInput.value;
+    const betaUser = checkBetaCode(code);
+    if (!betaUser) {
+        betaStatus.textContent = "Kod geçersiz! ❌";
+        return;
+    }
+    betaStatus.textContent = "";
+    document.getElementById("beta-code-setup").classList.add("hidden");
+    chatInterface.classList.remove("hidden");
+    authInfo.textContent = betaUser.admin ? "🎉 Admin olarak giriş yaptınız." : "Beta kullanıcı olarak giriş yaptınız.";
+});
+
+// ------------------- Sohbet Formu -------------------
+chatForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    chatInput.value = "";
+    appendMessage(message, "user");
+
+    sendBtn.disabled = true;
+    chatInput.disabled = true;
+    statusMessage.textContent = "Alesta AI yazıyor...";
+
+    try {
+        const payload = {
+            contents: [{ parts: [{ text: message }] }],
+            tools: [{ google_search: {} }]
+        };
+
+        const response = await fetch(`${API_URL}?key=${API_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const parts = result?.candidates?.[0]?.content?.parts || [];
+        const aiText = parts.map(p => p.text || "").join("\n");
+
+        appendMessage(aiText, "ai");
+        statusMessage.textContent = "";
+
+    } catch (err) {
+        console.error(err);
+        statusMessage.textContent = "Hata oluştu: " + err.message;
+    }
+
+    sendBtn.disabled = false;
+    chatInput.disabled = false;
+});
+</script>
+
+</body>
+</html>

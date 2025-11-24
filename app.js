@@ -5,7 +5,7 @@ const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-
 
 let API_KEY = localStorage.getItem(API_KEY_STORAGE_KEY);
 // Kullanıcının sağladığı YENİ API anahtarı bu satırda tanımlandı.
-const USER_PROVIDED_API_KEY = "AIzaSyDG0rKbCkOH4FtarT-ObD-U7JfQ4OsArSY"; 
+const USER_PROVIDED_API_KEY = "AIzaSyBX9_UN_RGr3VLDTSOriuUDOj1nI7glrbc"; 
 
 
 // ------------------- UI Elemanları -------------------

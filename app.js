@@ -31,12 +31,14 @@ function appendMessage(text, role) {
     historyList.scrollTop = historyList.scrollHeight;
 }
 
+// Multi-Turn: Geçmişi tarayıcıya kaydet
 function saveHistory(user, ai) {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     history.push({ user, ai });
     localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(history));
 }
 
+// Multi-Turn: Geçmişi API'nin anlayacağı formata dönüştür
 function getStructuredHistory(newMessage) {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     const contents = [];
@@ -166,7 +168,7 @@ chatForm.addEventListener("submit", async (e) => {
             aiText = "Üzgünüm, şu anda bir yanıt oluşturulamadı. (Boş yanıt alındı)";
         }
         
-        saveHistory(message, aiText); 
+        saveHistory(message, aiText); // Başarılıysa geçmişi kaydet
 
         // Yanıtı akıcı bir şekilde yazdırma (Typing effect)
         let i = 0;

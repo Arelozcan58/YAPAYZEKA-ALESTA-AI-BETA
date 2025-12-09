@@ -1,4 +1,20 @@
-// ------------------- Sabitler -------------------
+// Yeni Workers URL'niz
+const WORKER_URL = 'https://yapayzeka21.ozcanarel25.workers.dev/'; 
+
+fetch(WORKER_URL, { 
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+        // AI API'sinin beklediği prompt, model vb. verileri buraya ekleyin
+        prompt: "Yapay zeka sorusu", 
+        model: "gpt-3.5-turbo" 
+    }),
+})
+.then(response => response.json())
+// ... kalan kod//
+------------------- Sabitler -------------------
 const API_KEY_STORAGE_KEY = 'gemini_api_key';
 const CHAT_HISTORY_KEY = 'alesta_chat_history_js';
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";

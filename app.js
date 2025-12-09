@@ -1,33 +1,24 @@
-// Yeni Workers URL'niz
+// Worker URL'niz artık API isteğinizin yeni hedefi olacak.
 const WORKER_URL = 'https://yapayzeka21.ozcanarel25.workers.dev/'; 
 
-fetch(WORKER_URL, { 
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ 
-        // AI API'sinin beklediği prompt, model vb. verileri buraya ekleyin
-        prompt: "Yapay zeka sorusu", 
-        model: "gpt-3.5-turbo" 
-    }),
-})
-.then(response => response.json())
-// ... kalan kod//
-------------------- Sabitler -------------------
-const API_KEY_STORAGE_KEY = 'gemini_api_key';
+// ------------------- Sabitler -------------------
 const CHAT_HISTORY_KEY = 'alesta_chat_history_js';
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+//const API_KEY_STORAGE_KEY = 'gemini_api_key'; // SİLİNDİ: Anahtarı tarayıcıda tutmaya gerek kalmadı.
+//const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"; // SİLİNDİ: Doğrudan API URL'sine ihtiyacımız yok.
 
-let API_KEY = localStorage.getItem(API_KEY_STORAGE_KEY);
+// let API_KEY = localStorage.getItem(API_KEY_STORAGE_KEY); // SİLİNDİ: API anahtarını tarayıcıdan çekmiyoruz.
 // Kullanıcının sağladığı YENİ API anahtarı bu satırda tanımlandı.
-const USER_PROVIDED_API_KEY = "AIzaSyCYRzFEiBLCXZxsfPidUqdJqN7A3oTnNI4"; 
+// const USER_PROVIDED_API_KEY = "AIzaSyCYRzFEiBLCXZxsfPidUqdJqN7A3oTnNI4"; // SİLİNDİ: Bu da açıkta kalmamalı.
 
+// ⚠️ NOT: API anahtarı ile ilgili tüm değişkenleri kaldırdık. 
+// Bu, API anahtarının kaydedilmesi ve gösterilmesi ile ilgili tüm UI mantığının değişmesi gerektiği anlamına gelir.
+let API_KEY_IS_CONFIGURED = true; // Workers kullandığımız için varsayılan olarak yapılandırılmış kabul ediyoruz.
 
 // ------------------- UI Elemanları -------------------
 const keySetup = document.getElementById("key-setup");
 const chatInterface = document.getElementById("chat-interface");
 
+// Anahtar ile ilgili UI elemanları artık işlevsiz olabilir, ancak şimdilik bırakalım.
 const keyInput = document.getElementById("key-input");
 const saveKeyBtn = document.getElementById("save-key");
 const toggleKeyBtn = document.getElementById("toggle-key");
@@ -51,52 +42,45 @@ themeToggle.addEventListener("click", () => {
 if (localStorage.getItem("theme-dark") === "true") document.body.classList.add("dark");
 
 // ------------------- Anahtar Göster/Gizle -------------------
-toggleKeyBtn.addEventListener("click", () => {
-    keyInput.type = keyInput.type === "password" ? "text" : "password";
-    toggleKeyBtn.textContent = keyInput.type === "password" ? "Göster" : "Gizle";
-});
+// toggleKeyBtn.addEventListener("click", () => { // SİLİNDİ: Artık anahtar göstermiyoruz.
+//     keyInput.type = keyInput.type === "password" ? "text" : "password";
+//     toggleKeyBtn.textContent = keyInput.type === "password" ? "Göster" : "Gizle";
+// });
 
-// ------------------- UI Güncelleme -------------------
+// ------------------- UI Güncelleme (WORKER'a göre GÜNCELLENDİ) -------------------
 function updateUI() {
-    if (API_KEY) {
-        keySetup.classList.add("hidden");
-        chatInterface.classList.remove("hidden");
+    // API_KEY kontrolü yerine, her zaman sohbet arayüzünü gösteriyoruz
+    // çünkü anahtar gizlenmiş bir Worker'da.
+    // Ancak, Worker'ı kullanmak için 'keySetup' UI'ının tamamen kaldırılması veya değiştirilmesi GEREKİR.
+    keySetup.classList.add("hidden");
+    chatInterface.classList.remove("hidden");
 
-        authInfo.innerHTML = `<span class="px-3 py-1 bg-green-700 text-white rounded">Anahtar kayıtlı</span>
-                              <button id="remove-key" class="underline ml-2 text-red-600">Kaldır</button>`;
-        document.getElementById("remove-key").onclick = removeKey;
-        loadHistory();
-    } else {
-        keySetup.classList.remove("hidden");
-        chatInterface.classList.add("hidden");
-        // API key yoksa, kullanıcının sağladığı anahtarı önceden doldur
-        keyInput.value = USER_PROVIDED_API_KEY; 
-        keyStatus.textContent = "Kaydetmek için yukarıdaki tuşa basınız.";
-    }
+    authInfo.innerHTML = `<span class="px-3 py-1 bg-blue-700 text-white rounded">Cloudflare Worker (Güvenli) Kullanılıyor</span>`;
+    loadHistory();
 }
 
-// ------------------- API Key Kaydet -------------------
-saveKeyBtn.addEventListener("click", () => {
-    const key = keyInput.value.trim();
-    if (key.startsWith("AIza") && key.length > 20) {
-        localStorage.setItem(API_KEY_STORAGE_KEY, key);
-        API_KEY = key;
-        updateUI();
-    } else {
-        keyStatus.textContent = "Geçerli bir API anahtarı giriniz!";
-    }
-});
+// ------------------- API Key Kaydet (SİLİNDİ) -------------------
+// saveKeyBtn.addEventListener("click", () => { 
+//     const key = keyInput.value.trim();
+//     if (key.startsWith("AIza") && key.length > 20) {
+//         localStorage.setItem(API_KEY_STORAGE_KEY, key);
+//         API_KEY = key;
+//         updateUI();
+//     } else {
+//         keyStatus.textContent = "Geçerli bir API anahtarı giriniz!";
+//     }
+// });
 
-// ------------------- Anahtar Sil -------------------
-function removeKey() {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    localStorage.removeItem(CHAT_HISTORY_KEY);
-    API_KEY = null;
-    historyList.innerHTML = "";
-    updateUI();
-}
+// ------------------- Anahtar Sil (SİLİNDİ) -------------------
+// function removeKey() {
+//     localStorage.removeItem(API_KEY_STORAGE_KEY);
+//     localStorage.removeItem(CHAT_HISTORY_KEY);
+//     API_KEY = null;
+//     historyList.innerHTML = "";
+//     updateUI();
+// }
 
-// ------------------- Mesaj Ekle -------------------
+// ------------------- Mesaj Ekle (DEĞİŞMEDİ) -------------------
 function appendMessage(text, role) {
     const li = document.createElement("li");
     li.className = `p-3 shadow max-w-[80%] whitespace-pre-wrap ${
@@ -107,7 +91,7 @@ function appendMessage(text, role) {
     historyList.scrollTop = historyList.scrollHeight;
 }
 
-// ------------------- Geçmiş -------------------
+// ------------------- Geçmiş (DEĞİŞMEDİ) -------------------
 function loadHistory() {
     // API çağrısı için formatlanmamış geçmişi yükle
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
@@ -141,13 +125,13 @@ function getStructuredHistory(newMessage) {
     return contents;
 }
 
-// ------------------- Sohbet Temizleme -------------------
+// ------------------- Sohbet Temizleme (DEĞİŞMEDİ) -------------------
 clearChat.addEventListener("click", () => {
     localStorage.removeItem(CHAT_HISTORY_KEY);
     historyList.innerHTML = "";
 });
 
-// ------------------- API Çağrısı (Multi-Turn Destekli) -------------------
+// ------------------- API Çağrısı (WORKER'a göre GÜNCELLENDİ) -------------------
 chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const message = chatInput.value.trim();
@@ -165,17 +149,19 @@ chatForm.addEventListener("submit", async (e) => {
         const contents = getStructuredHistory(message);
 
         // API isteği payload'ını oluştur
+        // NOT: model ve tools gibi ek yapılandırmalar Worker tarafından beklenmelidir.
+        // Worker'ı da buna göre düzenlediğinizden emin olun!
         const payload = { 
             contents: contents, 
             config: {
-                // Ek Özellik: Yanıtların yaratıcılığını/çeşitliliğini artırır (0.0-1.0 arası, 0.7 önerilir)
-                temperature: 0.7 
+                temperature: 0.7
             },
-            // Ek Özellik: Google Search aracı etkin
             tools: [{ google_search: {} }] 
         };
 
-        const response = await fetch(`${API_URL}?key=${API_KEY}`, {
+        // !!! İŞTE KRİTİK DEĞİŞİKLİK: WORKER URL'SİNE İSTEK GÖNDERİLİYOR !!!
+        // API anahtarı artık URL'de veya başlıkta GÖNDERİLMİYOR.
+        const response = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -186,7 +172,8 @@ chatForm.addEventListener("submit", async (e) => {
         if (result.error) {
              throw new Error(result.error.message || "Bilinmeyen API Hatası");
         }
-
+        
+        // Worker tarafından döndürülen yanıt hala Gemini formatında olmalıdır.
         const parts = result?.candidates?.[0]?.content?.parts || [];
         const aiText = parts.map(p => p.text || "").join("\n");
         appendMessage(aiText, "ai");

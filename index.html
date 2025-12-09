@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial- চলেছে">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Alesta AI - Güvenli Sohbet</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -74,7 +74,7 @@ const moonIcon = document.getElementById("moon-icon");
 
 let isTyping = false; 
 
-// ------------------- YARDIMCI FONKSİYONLAR (SIRALAMA DÜZELTİLDİ) -------------------
+// ------------------- YARDIMCI FONKSİYONLAR -------------------
 
 // 1. Mesaj Ekleme Fonksiyonu
 function appendMessage(text, role) {
@@ -178,7 +178,7 @@ chatForm.addEventListener("submit", async (e) => {
     if (!message) return;
 
     chatInput.value = "";
-    appendMessage(`**Sen:** ${message}`, "user"); // appendMessage artık tanımlı olduğu için hata vermez
+    appendMessage(`**Sen:** ${message}`, "user"); 
 
     isTyping = true;
     sendBtn.disabled = true;
@@ -206,18 +206,20 @@ chatForm.addEventListener("submit", async (e) => {
             tools: [{ google_search: {} }] 
         };
         
-        // !!! API ANAHTARI YOK, DOĞRUDAN WORKER'A GİDİYOR !!!
+        // İstek gönderme
         const response = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-
+        
+        // Yanıtın JSON olarak ayrıştırılması
         const result = await response.json();
         
         if (!response.ok || result.error) {
-            const errorMessage = result.error?.message || `API Hatası: HTTP ${response.status} ${response.statusText}`;
-            throw new Error(errorMessage);
+            // Hata durumunda net bir hata mesajı oluştur
+            const errorMsg = result.error?.message || `Worker/API Hatası: HTTP ${response.status} ${response.statusText}`;
+            throw new Error(errorMsg);
         }
 
         const parts = result?.candidates?.[0]?.content?.parts || [];
@@ -229,7 +231,7 @@ chatForm.addEventListener("submit", async (e) => {
         
         saveHistory(message, aiText); 
 
-        // Yanıtı akıcı bir şekilde yazdırma
+        // Yanıtı akıcı bir şekilde yazdırma (Typing effect)
         let i = 0;
         const speed = 15;
         
@@ -243,6 +245,7 @@ chatForm.addEventListener("submit", async (e) => {
             } else {
                 aiLi.querySelector('.flex').innerHTML = `<span class="font-bold">Alesta AI:</span>`;
                 statusMessage.textContent = "Cevap hazır. 👍";
+                // İşlem bittiğinde kilitleri kaldır
                 isTyping = false;
                 sendBtn.disabled = false;
                 chatInput.disabled = false;
@@ -253,14 +256,21 @@ chatForm.addEventListener("submit", async (e) => {
 
 
     } catch (err) {
-        console.error(err);
+        console.error("Fetch/JSON Hatası:", err);
         
+        // Hata durumunda son mesajı (yazıyor mesajını) hata mesajına dönüştür
         const lastLi = historyList.lastElementChild;
-        if (lastLi) {
-            lastLi.innerHTML = `<span class="font-bold text-red-500">Alesta AI (HATA):</span> ${err.message}`;
+        if (lastLi && lastLi.contains(aiResponseTextElement)) {
+            aiResponseTextElement.innerHTML = `<span class="font-bold text-red-500">HATA:</span> ${err.message}`;
+            lastLi.querySelector('.flex').innerHTML = `<span class="font-bold">Alesta AI:</span>`;
+        } else {
+             // Eğer lastLi'ye ulaşamazsa, yeni bir hata mesajı ekle
+            appendMessage(`**HATA:** ${err.message}`, "ai");
         }
+        
         statusMessage.textContent = `Hata oluştu: ${err.message.substring(0, 50)}... 🛑`;
 
+        // İşlem bittiğinde kilitleri kaldır
         isTyping = false;
         sendBtn.disabled = false;
         chatInput.disabled = false;

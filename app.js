@@ -21,27 +21,22 @@ let isTyping = false;
 
 // ------------------- YARDIMCI FONKSİYONLAR -------------------
 
-// 1. Mesaj Ekleme Fonksiyonu
 function appendMessage(text, role) {
     const li = document.createElement("li");
     li.className = `p-4 shadow-xl max-w-[85%] whitespace-pre-wrap transition-all duration-300 ${
         role === "user" ? "self-end user-msg" : "self-start ai-msg"
     }`;
-    
-    // marked.js ile Markdown'ı HTML'e dönüştür
-    li.innerHTML = marked.parse(text); 
+    li.innerHTML = marked.parse(text);
     historyList.appendChild(li);
     historyList.scrollTop = historyList.scrollHeight;
 }
 
-// 2. Geçmiş Kaydetme Fonksiyonu
 function saveHistory(user, ai) {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     history.push({ user, ai });
     localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(history));
 }
 
-// 3. Multi-Turn için Geçmişi Hazırlama Fonksiyonu (Gemini formatı)
 function getStructuredHistory(newMessage) {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     const contents = [];
@@ -54,11 +49,9 @@ function getStructuredHistory(newMessage) {
     });
 
     contents.push({ role: "user", parts: [{ text: newMessage }] });
-
     return contents;
 }
 
-// 4. Geçmiş Yükleme Fonksiyonu
 function loadHistory() {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     historyList.innerHTML = "";
@@ -69,14 +62,12 @@ function loadHistory() {
                                 <p class="mt-1">Merhaba! API anahtarı güvenli Worker'da gizli. Nasıl yardımcı olabilirim?</p>
                             </li>`;
 
-    // Geçmiş mesajları yükle
     history.forEach(m => { 
         appendMessage(`**Sen:** ${m.user}`, "user"); 
         appendMessage(m.ai, "ai"); 
     });
 }
 
-// 5. Tema Fonksiyonu
 function setDarkMode(isDark) {
     if (isDark) {
         body.classList.add('dark');
@@ -94,8 +85,7 @@ function setDarkMode(isDark) {
 // ------------------- OLAY DİNLEYİCİLERİ -------------------
 
 themeToggle.addEventListener("click", () => {
-    const isDark = body.classList.contains('dark');
-    setDarkMode(!isDark);
+    setDarkMode(!body.classList.contains('dark'));
 });
 
 clearChat.addEventListener("click", () => {
@@ -103,15 +93,21 @@ clearChat.addEventListener("click", () => {
     loadHistory(); 
 });
 
+// Sayfa yüklendiğinde temayı ve geçmişi ayarla
+document.addEventListener("DOMContentLoaded", () => {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
+    loadHistory();
+});
+
 
 // ------------------- API ÇAĞRISI (GÜVENLİ WORKER) -------------------
 chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (isTyping) return; 
+    if (isTyping || !chatInput.value.trim()) return; 
 
     const message = chatInput.value.trim();
-    if (!message) return;
-
     chatInput.value = "";
     appendMessage(`**Sen:** ${message}`, "user"); 
 
@@ -120,7 +116,7 @@ chatForm.addEventListener("submit", async (e) => {
     chatInput.disabled = true;
     statusMessage.textContent = "Alesta AI yazıyor... ⏳";
 
-    // Yanıt için bekleyen balonu oluştur
+    // Yanıt bekleme balonu
     const aiLi = document.createElement("li");
     aiLi.className = `p-4 shadow-xl max-w-[85%] self-start ai-msg`;
     aiLi.innerHTML = `
@@ -139,23 +135,28 @@ chatForm.addEventListener("submit", async (e) => {
 
         const payload = { 
             contents: contents, 
-            // Model adı (gemini-2.5-flash) Worker'da sabit olarak belirlenebilir veya payload'a eklenebilir.
-            // Bu haliyle, Worker'ın hangi modeli kullanacağına karar vermesini sağlıyoruz.
             tools: [{ google_search: {} }] 
         };
         
-        // !!! API Anahtarı GÖNDERİLMEDEN, WORKER'A YÖNLENDİRME !!!
+        // Güvenli Worker çağrısı
         const response = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
+        // Hata kontrolü, 4xx veya 5xx kodlarında bile JSON ayrıştırmayı dener
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            // JSON ayrıştırma hatası, muhtemelen worker düzgün bir yanıt dönmedi
+            throw new Error(`Worker'dan geçerli JSON alınamadı. HTTP Durum: ${response.status}`);
+        }
         
         if (!response.ok || result.error) {
-            const errorMessage = result.error?.message || `API Hatası: HTTP ${response.status} ${response.statusText}`;
-            throw new Error(errorMessage);
+            const errorMsg = result.error?.message || `Worker/API Hatası: HTTP ${response.status} ${response.statusText}`;
+            throw new Error(errorMsg);
         }
 
         const parts = result?.candidates?.[0]?.content?.parts || [];
@@ -191,28 +192,21 @@ chatForm.addEventListener("submit", async (e) => {
 
 
     } catch (err) {
-        console.error(err);
+        console.error("Fetch/JSON Hatası:", err);
         
-        // Hata durumunda son mesajı güncelle
+        // Hata durumunda son mesajı hata mesajına dönüştür
         const lastLi = historyList.lastElementChild;
-        if (lastLi) {
-            lastLi.innerHTML = `<span class="font-bold text-red-500">Alesta AI (HATA):</span> ${err.message}`;
+        if (lastLi && lastLi.contains(aiResponseTextElement)) {
+            aiResponseTextElement.innerHTML = `<span class="font-bold text-red-500">HATA:</span> ${err.message}`;
+            lastLi.querySelector('.flex').innerHTML = `<span class="font-bold">Alesta AI:</span>`;
+        } else {
+            appendMessage(`**HATA:** ${err.message}`, "ai");
         }
+        
         statusMessage.textContent = `Hata oluştu: ${err.message.substring(0, 50)}... 🛑`;
 
         isTyping = false;
         sendBtn.disabled = false;
         chatInput.disabled = false;
     }
-});
-
-// Sayfa yüklendiğinde temayı ve geçmişi başlat
-document.addEventListener("DOMContentLoaded", () => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        setDarkMode(true);
-    } else {
-        setDarkMode(false);
-    }
-    loadHistory();
 });

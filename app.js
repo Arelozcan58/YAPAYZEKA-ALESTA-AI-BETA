@@ -1,191 +1,218 @@
-// Worker URL'niz artık API isteğinizin yeni hedefi olacak.
+// app.js
+
+// !!! BURAYI KENDİ WORKER ADRESİNİZLE GÜNCELLEYİN !!!
 const WORKER_URL = 'https://yapayzeka21.ozcanarel25.workers.dev/'; 
 
-// ------------------- Sabitler -------------------
-const CHAT_HISTORY_KEY = 'alesta_chat_history_js';
-//const API_KEY_STORAGE_KEY = 'gemini_api_key'; // SİLİNDİ: Anahtarı tarayıcıda tutmaya gerek kalmadı.
-//const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"; // SİLİNDİ: Doğrudan API URL'sine ihtiyacımız yok.
+// ------------------- SABİTLER ve UI ELEMANLARI -------------------
+const CHAT_HISTORY_KEY = 'alesta_chat_history_js_v4';
 
-// let API_KEY = localStorage.getItem(API_KEY_STORAGE_KEY); // SİLİNDİ: API anahtarını tarayıcıdan çekmiyoruz.
-// Kullanıcının sağladığı YENİ API anahtarı bu satırda tanımlandı.
-// const USER_PROVIDED_API_KEY = "AIzaSyCYRzFEiBLCXZxsfPidUqdJqN7A3oTnNI4"; // SİLİNDİ: Bu da açıkta kalmamalı.
-
-// ⚠️ NOT: API anahtarı ile ilgili tüm değişkenleri kaldırdık. 
-// Bu, API anahtarının kaydedilmesi ve gösterilmesi ile ilgili tüm UI mantığının değişmesi gerektiği anlamına gelir.
-let API_KEY_IS_CONFIGURED = true; // Workers kullandığımız için varsayılan olarak yapılandırılmış kabul ediyoruz.
-
-// ------------------- UI Elemanları -------------------
-const keySetup = document.getElementById("key-setup");
-const chatInterface = document.getElementById("chat-interface");
-
-// Anahtar ile ilgili UI elemanları artık işlevsiz olabilir, ancak şimdilik bırakalım.
-const keyInput = document.getElementById("key-input");
-const saveKeyBtn = document.getElementById("save-key");
-const toggleKeyBtn = document.getElementById("toggle-key");
-
+const body = document.body;
 const historyList = document.getElementById("history-list");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
 const statusMessage = document.getElementById("status-message");
-const authInfo = document.getElementById("auth-info");
-
 const themeToggle = document.getElementById("theme-toggle");
 const clearChat = document.getElementById("clear-chat");
-const keyStatus = document.getElementById("key-status");
+const sunIcon = document.getElementById("sun-icon");
+const moonIcon = document.getElementById("moon-icon");
 
-// ------------------- Tema -------------------
-themeToggle.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
-    localStorage.setItem("theme-dark", document.body.classList.contains("dark"));
-});
-if (localStorage.getItem("theme-dark") === "true") document.body.classList.add("dark");
+let isTyping = false; 
 
-// ------------------- Anahtar Göster/Gizle -------------------
-// toggleKeyBtn.addEventListener("click", () => { // SİLİNDİ: Artık anahtar göstermiyoruz.
-//     keyInput.type = keyInput.type === "password" ? "text" : "password";
-//     toggleKeyBtn.textContent = keyInput.type === "password" ? "Göster" : "Gizle";
-// });
+// ------------------- YARDIMCI FONKSİYONLAR -------------------
 
-// ------------------- UI Güncelleme (WORKER'a göre GÜNCELLENDİ) -------------------
-function updateUI() {
-    // API_KEY kontrolü yerine, her zaman sohbet arayüzünü gösteriyoruz
-    // çünkü anahtar gizlenmiş bir Worker'da.
-    // Ancak, Worker'ı kullanmak için 'keySetup' UI'ının tamamen kaldırılması veya değiştirilmesi GEREKİR.
-    keySetup.classList.add("hidden");
-    chatInterface.classList.remove("hidden");
-
-    authInfo.innerHTML = `<span class="px-3 py-1 bg-blue-700 text-white rounded">Cloudflare Worker (Güvenli) Kullanılıyor</span>`;
-    loadHistory();
-}
-
-// ------------------- API Key Kaydet (SİLİNDİ) -------------------
-// saveKeyBtn.addEventListener("click", () => { 
-//     const key = keyInput.value.trim();
-//     if (key.startsWith("AIza") && key.length > 20) {
-//         localStorage.setItem(API_KEY_STORAGE_KEY, key);
-//         API_KEY = key;
-//         updateUI();
-//     } else {
-//         keyStatus.textContent = "Geçerli bir API anahtarı giriniz!";
-//     }
-// });
-
-// ------------------- Anahtar Sil (SİLİNDİ) -------------------
-// function removeKey() {
-//     localStorage.removeItem(API_KEY_STORAGE_KEY);
-//     localStorage.removeItem(CHAT_HISTORY_KEY);
-//     API_KEY = null;
-//     historyList.innerHTML = "";
-//     updateUI();
-// }
-
-// ------------------- Mesaj Ekle (DEĞİŞMEDİ) -------------------
+// 1. Mesaj Ekleme Fonksiyonu
 function appendMessage(text, role) {
     const li = document.createElement("li");
-    li.className = `p-3 shadow max-w-[80%] whitespace-pre-wrap ${
+    li.className = `p-4 shadow-xl max-w-[85%] whitespace-pre-wrap transition-all duration-300 ${
         role === "user" ? "self-end user-msg" : "self-start ai-msg"
     }`;
-    li.innerHTML = marked.parse(text);
+    
+    // marked.js ile Markdown'ı HTML'e dönüştür
+    li.innerHTML = marked.parse(text); 
     historyList.appendChild(li);
     historyList.scrollTop = historyList.scrollHeight;
 }
 
-// ------------------- Geçmiş (DEĞİŞMEDİ) -------------------
-function loadHistory() {
-    // API çağrısı için formatlanmamış geçmişi yükle
-    const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
-    historyList.innerHTML = "";
-    // UI'da göster
-    history.forEach(m => { appendMessage(m.user, "user"); appendMessage(m.ai, "ai"); });
-}
-
+// 2. Geçmiş Kaydetme Fonksiyonu
 function saveHistory(user, ai) {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     history.push({ user, ai });
     localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(history));
 }
 
+// 3. Multi-Turn için Geçmişi Hazırlama Fonksiyonu (Gemini formatı)
 function getStructuredHistory(newMessage) {
     const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     const contents = [];
 
-    // Geçmişi (kullanıcı ve model yanıtları) API'nin beklediği 'contents' formatına dönüştür
     history.forEach(m => {
         contents.push({ role: "user", parts: [{ text: m.user }] });
-        // Eksik cevabı olan mesajları atlayarak stabiliteyi artır
         if (m.ai) {
             contents.push({ role: "model", parts: [{ text: m.ai }] });
         }
     });
 
-    // Yeni mesajı ekle
     contents.push({ role: "user", parts: [{ text: newMessage }] });
 
     return contents;
 }
 
-// ------------------- Sohbet Temizleme (DEĞİŞMEDİ) -------------------
-clearChat.addEventListener("click", () => {
-    localStorage.removeItem(CHAT_HISTORY_KEY);
+// 4. Geçmiş Yükleme Fonksiyonu
+function loadHistory() {
+    const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
     historyList.innerHTML = "";
+    
+    // İlk karşılama mesajını ekle
+    historyList.innerHTML = `<li class="self-start p-4 shadow-xl max-w-[85%] ai-msg">
+                                <p class="font-bold">Alesta AI:</p>
+                                <p class="mt-1">Merhaba! API anahtarı güvenli Worker'da gizli. Nasıl yardımcı olabilirim?</p>
+                            </li>`;
+
+    // Geçmiş mesajları yükle
+    history.forEach(m => { 
+        appendMessage(`**Sen:** ${m.user}`, "user"); 
+        appendMessage(m.ai, "ai"); 
+    });
+}
+
+// 5. Tema Fonksiyonu
+function setDarkMode(isDark) {
+    if (isDark) {
+        body.classList.add('dark');
+        moonIcon.classList.add('hidden');
+        sunIcon.classList.remove('hidden');
+        localStorage.setItem('theme', 'dark');
+    } else {
+        body.classList.remove('dark');
+        moonIcon.classList.remove('hidden');
+        sunIcon.classList.add('hidden');
+        localStorage.setItem('theme', 'light');
+    }
+}
+
+// ------------------- OLAY DİNLEYİCİLERİ -------------------
+
+themeToggle.addEventListener("click", () => {
+    const isDark = body.classList.contains('dark');
+    setDarkMode(!isDark);
 });
 
-// ------------------- API Çağrısı (WORKER'a göre GÜNCELLENDİ) -------------------
+clearChat.addEventListener("click", () => {
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+    loadHistory(); 
+});
+
+
+// ------------------- API ÇAĞRISI (GÜVENLİ WORKER) -------------------
 chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (isTyping) return; 
+
     const message = chatInput.value.trim();
     if (!message) return;
 
     chatInput.value = "";
-    appendMessage(message, "user");
+    appendMessage(`**Sen:** ${message}`, "user"); 
 
+    isTyping = true;
     sendBtn.disabled = true;
     chatInput.disabled = true;
-    statusMessage.textContent = "Alesta AI yazıyor...";
+    statusMessage.textContent = "Alesta AI yazıyor... ⏳";
+
+    // Yanıt için bekleyen balonu oluştur
+    const aiLi = document.createElement("li");
+    aiLi.className = `p-4 shadow-xl max-w-[85%] self-start ai-msg`;
+    aiLi.innerHTML = `
+        <div class="flex items-center space-x-2">
+            <span class="font-bold">Alesta AI:</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400">Yazılıyor...</span>
+        </div>
+        <div id="ai-response-text" class="mt-1"></div>
+    `;
+    historyList.appendChild(aiLi);
+    historyList.scrollTop = historyList.scrollHeight;
+    const aiResponseTextElement = aiLi.querySelector('#ai-response-text');
 
     try {
-        // Multi-Turn için tüm geçmişi al ve yeni mesajı ekle
         const contents = getStructuredHistory(message);
 
-        // API isteği payload'ını oluştur
-        // NOT: model ve tools gibi ek yapılandırmalar Worker tarafından beklenmelidir.
-        // Worker'ı da buna göre düzenlediğinizden emin olun!
         const payload = { 
             contents: contents, 
-            config: {
-                temperature: 0.7
-            },
+            // Model adı (gemini-2.5-flash) Worker'da sabit olarak belirlenebilir veya payload'a eklenebilir.
+            // Bu haliyle, Worker'ın hangi modeli kullanacağına karar vermesini sağlıyoruz.
             tools: [{ google_search: {} }] 
         };
-
-        // !!! İŞTE KRİTİK DEĞİŞİKLİK: WORKER URL'SİNE İSTEK GÖNDERİLİYOR !!!
-        // API anahtarı artık URL'de veya başlıkta GÖNDERİLMİYOR.
+        
+        // !!! API Anahtarı GÖNDERİLMEDEN, WORKER'A YÖNLENDİRME !!!
         const response = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
+
         const result = await response.json();
         
-        // Hata kontrolü: Eğer yanıt "error" içeriyorsa
-        if (result.error) {
-             throw new Error(result.error.message || "Bilinmeyen API Hatası");
+        if (!response.ok || result.error) {
+            const errorMessage = result.error?.message || `API Hatası: HTTP ${response.status} ${response.statusText}`;
+            throw new Error(errorMessage);
+        }
+
+        const parts = result?.candidates?.[0]?.content?.parts || [];
+        let aiText = parts.map(p => p.text || "").join("\n");
+        
+        if (!aiText) {
+            aiText = "Üzgünüm, şu anda bir yanıt oluşturulamadı. (Boş yanıt alındı)";
         }
         
-        // Worker tarafından döndürülen yanıt hala Gemini formatında olmalıdır.
-        const parts = result?.candidates?.[0]?.content?.parts || [];
-        const aiText = parts.map(p => p.text || "").join("\n");
-        appendMessage(aiText, "ai");
-        saveHistory(message, aiText); // Başarılı cevabı kaydet
-        statusMessage.textContent = "";
+        saveHistory(message, aiText); 
+
+        // Yanıtı akıcı bir şekilde yazdırma (Typing effect)
+        let i = 0;
+        const speed = 15;
+        
+        function typeWriter() {
+            if (i < aiText.length) {
+                const partialText = aiText.substring(0, i + 1);
+                aiResponseTextElement.innerHTML = marked.parse(partialText);
+                i++;
+                historyList.scrollTop = historyList.scrollHeight;
+                setTimeout(typeWriter, speed);
+            } else {
+                aiLi.querySelector('.flex').innerHTML = `<span class="font-bold">Alesta AI:</span>`;
+                statusMessage.textContent = "Cevap hazır. 👍";
+                isTyping = false;
+                sendBtn.disabled = false;
+                chatInput.disabled = false;
+                chatInput.focus();
+            }
+        }
+        typeWriter();
+
+
     } catch (err) {
         console.error(err);
-        statusMessage.textContent = "Hata oluştu: " + err.message;
-    }
+        
+        // Hata durumunda son mesajı güncelle
+        const lastLi = historyList.lastElementChild;
+        if (lastLi) {
+            lastLi.innerHTML = `<span class="font-bold text-red-500">Alesta AI (HATA):</span> ${err.message}`;
+        }
+        statusMessage.textContent = `Hata oluştu: ${err.message.substring(0, 50)}... 🛑`;
 
-    sendBtn.disabled = false;
-    chatInput.disabled = false;
+        isTyping = false;
+        sendBtn.disabled = false;
+        chatInput.disabled = false;
+    }
 });
 
-updateUI();
+// Sayfa yüklendiğinde temayı ve geçmişi başlat
+document.addEventListener("DOMContentLoaded", () => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        setDarkMode(true);
+    } else {
+        setDarkMode(false);
+    }
+    loadHistory();
+});
